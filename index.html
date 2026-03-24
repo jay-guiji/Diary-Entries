@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>记账APP</title>
+
+    <!-- PWA 核心 -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#005DA7" />
+
+    <!-- iOS PWA 适配 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="记账" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- 常规图标 -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+
+    <!-- iOS 启动画面（白色背景 + 图标居中） -->
+    <meta name="apple-mobile-web-app-title" content="记账">
+    <style>
+      /* 防止 iOS 添加到主屏幕时出现白屏闪烁 */
+      html, body { 
+        margin: 0; padding: 0; 
+        background: #F7FAFC; 
+        -webkit-tap-highlight-color: transparent;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      /* 首屏骨架屏 — JS 加载前立即显示，避免白屏 */
+      #app-skeleton {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        max-width: 448px;
+        margin: 0 auto;
+        background: #F7FAFC;
+        overflow: hidden;
+      }
+      #app-skeleton .sk-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem 1.5rem;
+        padding-top: max(1rem, env(safe-area-inset-top));
+        background: #FAFAFA;
+        border-bottom: 1px solid #F5F5F5;
+      }
+      #app-skeleton .sk-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #005DA7;
+      }
+      #app-skeleton .sk-body {
+        flex: 1;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .sk-block {
+        background: linear-gradient(90deg, #E2E8F0 25%, #EDF2F7 50%, #E2E8F0 75%);
+        background-size: 200% 100%;
+        animation: sk-shimmer 1.5s infinite;
+        border-radius: 1rem;
+      }
+      @keyframes sk-shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      /* React 加载完成后隐藏骨架屏 */
+      #root:not(:empty) + #app-skeleton { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- 首屏骨架屏：在 React 渲染完成前显示，消除白屏 -->
+    <div id="app-skeleton">
+      <div class="sk-header">
+        <span class="sk-title">记账本</span>
+      </div>
+      <div class="sk-body">
+        <div class="sk-block" style="height:2rem;width:8rem"></div>
+        <div class="sk-block" style="height:10rem"></div>
+        <div style="display:flex;gap:0.75rem">
+          <div class="sk-block" style="height:6rem;flex:1"></div>
+          <div class="sk-block" style="height:6rem;flex:1"></div>
+        </div>
+        <div class="sk-block" style="height:3rem"></div>
+        <div class="sk-block" style="height:3rem"></div>
+        <div class="sk-block" style="height:3rem"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+
+    <!-- 注册 Service Worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('SW registered:', reg.scope))
+            .catch(err => console.log('SW registration failed:', err));
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "appId": "com.jay.bookkeeping",
+  "appName": "记账APP",
+  "webDir": "dist",
+  "server": {
+    "iosScheme": "capacitor",
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "preferredContentMode": "mobile",
+    "scheme": "记账APP"
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#005DA7"
+    },
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "launchShowDuration": 0,
+      "backgroundColor": "#005DA7",
+      "showSpinner": false,
+      "launchFadeOutDuration": 300
+    }
+  }
+}
