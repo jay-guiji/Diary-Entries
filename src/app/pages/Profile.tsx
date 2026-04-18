@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useApp, THEME_COLORS, FONT_SIZE_MAP } from '../store';
+import { categoryNames as catNames } from '../utils/categories';
 
 // ==================== 类型定义 ====================
 type ModalView =
@@ -242,11 +243,13 @@ function BudgetPanel({
 /** 数据备份与恢复面板 */
 function BackupPanel({
   onExport,
+  onExportCSV,
   onImport,
   onClose,
   transactionCount,
 }: {
   onExport: () => void;
+  onExportCSV: () => void;
   onImport: (file: File) => void;
   onClose: () => void;
   transactionCount: number;
@@ -271,8 +274,21 @@ function BackupPanel({
             <Download size={22} className="text-emerald-600" />
           </div>
           <div className="flex flex-col">
-            <span className="text-[#181C1E] text-sm font-bold">导出数据</span>
-            <span className="text-[#717783] text-xs mt-0.5">备份为 JSON 文件，可保存到本地</span>
+            <span className="text-[#181C1E] text-sm font-bold">导出数据 (JSON)</span>
+            <span className="text-[#717783] text-xs mt-0.5">完整备份，可用于恢复数据</span>
+          </div>
+        </button>
+
+        <button
+          onClick={onExportCSV}
+          className="flex items-center gap-4 bg-white border border-[#E2E8F0] rounded-2xl p-4 hover:bg-[#F7FAFC] active:bg-[#EDF2F7] transition-colors text-left"
+        >
+          <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center shrink-0">
+            <Download size={22} className="text-violet-600" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[#181C1E] text-sm font-bold">导出为 CSV</span>
+            <span className="text-[#717783] text-xs mt-0.5">适合在 Excel / 表格中分析</span>
           </div>
         </button>
 
@@ -737,6 +753,33 @@ export function Profile() {
     handleToast('数据已导出，请查看下载文件');
   };
 
+  const handleExportCSV = () => {
+    const headers = ['日期', '时间', '类型', '分类', '细分', '金额', '商户/来源', '备注'];
+    const rows = transactions.map(tx => [
+      tx.date,
+      tx.time,
+      tx.type === 'income' ? '收入' : '支出',
+      catNames[tx.category] || tx.category,
+      tx.subcategory || '',
+      tx.amount.toFixed(2),
+      tx.merchant || '',
+      tx.note || '',
+    ]);
+    const csv = '\uFEFF' + [headers, ...rows].map(row =>
+      row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `记账本_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    handleToast('CSV 文件已导出');
+  };
+
   const handleImport = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -845,6 +888,7 @@ export function Profile() {
           {activeModal === 'backup' && (
             <BackupPanel
               onExport={handleExport}
+              onExportCSV={handleExportCSV}
               onImport={handleImport}
               onClose={() => setActiveModal('none')}
               transactionCount={totalTransactions}
