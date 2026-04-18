@@ -805,7 +805,7 @@ export function Profile() {
   const handleClearData = () => {
     clearAllData();
     setActiveModal('none');
-    handleToast('数据已清除，恢复为示例数据');
+    handleToast('所有数据已清除');
   };
 
   const handleThemeSave = (colorScheme: string, fontSize: string) => {
@@ -919,7 +919,7 @@ export function Profile() {
                 </div>
               </div>
               <p className="text-[#717783] text-sm leading-relaxed">
-                将清除所有 {totalTransactions} 条交易记录和个人设置，恢复为默认示例数据。建议先导出备份。
+                将清除所有 {totalTransactions} 条交易记录、个人设置和主题配置，数据清除后不可恢复。建议先导出备份。
               </p>
               <div className="flex gap-3">
                 <button
