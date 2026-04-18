@@ -8,26 +8,16 @@ import {
 } from 'recharts';
 import {
   Calendar, ChevronLeft, ChevronRight,
-  Utensils, ShoppingBag, Car, Film,
-  Briefcase, Gift, TrendingUp, TrendingDown, Banknote, Inbox,
+  TrendingDown, Banknote, Inbox,
   Wallet, Receipt, CalendarDays, ArrowUpRight, ArrowDownRight, Minus,
   Crown, Medal, Award,
 } from 'lucide-react';
-
-const categoryConfig: Record<string, { name: string; color: string; icon: React.ElementType }> = {
-  Dining: { name: '餐饮美食', color: '#005DA7', icon: Utensils },
-  Shopping: { name: '购物消费', color: '#006D3C', icon: ShoppingBag },
-  Transport: { name: '交通出行', color: '#AA2E33', icon: Car },
-  Entertainment: { name: '娱乐休闲', color: '#7C3AED', icon: Film },
-  Salary: { name: '薪资收入', color: '#006D3C', icon: Briefcase },
-  Bonus: { name: '奖金', color: '#E85D04', icon: Gift },
-  Investment: { name: '投资收益', color: '#005DA7', icon: TrendingUp },
-  Other: { name: '其他', color: '#717783', icon: Banknote },
-};
+import { CATEGORY_MAP } from '../utils/categories';
 
 export function Reports() {
   const { transactions, budgetTotal } = useApp();
   const [tab, setTab] = useState<'expense' | 'income'>('expense');
+  const [viewMode, setViewMode] = useState<'monthly' | 'yearly'>('monthly');
 
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
@@ -59,9 +49,9 @@ export function Reports() {
     return Object.entries(stats)
       .map(([category, data]) => ({
         category,
-        name: categoryConfig[category]?.name || category,
-        color: categoryConfig[category]?.color || '#717783',
-        icon: categoryConfig[category]?.icon || Banknote,
+        name: CATEGORY_MAP[category]?.name || category,
+        color: CATEGORY_MAP[category]?.color || '#717783',
+        icon: CATEGORY_MAP[category]?.icon || Banknote,
         amount: data.amount,
         count: data.count,
         percent: total > 0 ? Math.round((data.amount / total) * 100) : 0,
@@ -149,6 +139,21 @@ export function Reports() {
     return months;
   }, [transactions, selectedYear, selectedMonth, tab]);
 
+  // ====== 年度报表数据 ======
+  const yearlyData = useMemo(() => {
+    const months = [];
+    for (let m = 1; m <= 12; m++) {
+      const mStr = `${selectedYear}-${String(m).padStart(2, '0')}`;
+      const monthTxs = transactions.filter(tx => tx.date.startsWith(mStr));
+      const income = monthTxs.filter(tx => tx.type === 'income').reduce((s, tx) => s + tx.amount, 0);
+      const expense = monthTxs.filter(tx => tx.type === 'expense').reduce((s, tx) => s + tx.amount, 0);
+      months.push({ month: m, label: `${m}月`, income, expense, balance: income - expense });
+    }
+    const totalIncome = months.reduce((s, m) => s + m.income, 0);
+    const totalExpense = months.reduce((s, m) => s + m.expense, 0);
+    return { months, totalIncome, totalExpense, balance: totalIncome - totalExpense };
+  }, [transactions, selectedYear]);
+
   // 月份切换
   const goToPrevMonth = () => {
     if (selectedMonth === 1) {
@@ -195,6 +200,27 @@ export function Reports() {
           </button>
         </div>
 
+        {/* 月度/年度切换 */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setViewMode('monthly')}
+            className={cn("flex-1 py-1.5 text-[13px] font-semibold rounded-lg transition-all",
+              viewMode === 'monthly' ? "bg-white shadow-sm" : "text-[#717783]")}
+            style={viewMode === 'monthly' ? { color: 'var(--theme-primary)' } : undefined}
+          >
+            月度
+          </button>
+          <button
+            onClick={() => setViewMode('yearly')}
+            className={cn("flex-1 py-1.5 text-[13px] font-semibold rounded-lg transition-all",
+              viewMode === 'yearly' ? "bg-white shadow-sm" : "text-[#717783]")}
+            style={viewMode === 'yearly' ? { color: 'var(--theme-primary)' } : undefined}
+          >
+            年度
+          </button>
+        </div>
+
+        {viewMode === 'monthly' ? (
         <div className="flex items-center gap-3">
           <button onClick={goToPrevMonth} className="w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm hover:bg-[#F1F4F6] transition-colors">
             <ChevronLeft size={18} style={{ color: 'var(--theme-primary)' }} />
@@ -214,9 +240,104 @@ export function Reports() {
             <ChevronRight size={18} style={{ color: 'var(--theme-primary)' }} />
           </button>
         </div>
+        ) : (
+        <div className="flex items-center gap-3">
+          <button onClick={() => setSelectedYear(y => y - 1)} className="w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm hover:bg-[#F1F4F6] transition-colors">
+            <ChevronLeft size={18} style={{ color: 'var(--theme-primary)' }} />
+          </button>
+          <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm flex-1 justify-center">
+            <Calendar size={16} style={{ color: 'var(--theme-primary)' }} />
+            <span className="text-[#181C1E] text-sm font-bold">{selectedYear}年</span>
+          </div>
+          <button
+            onClick={() => { if (selectedYear < new Date().getFullYear()) setSelectedYear(y => y + 1); }}
+            disabled={selectedYear >= new Date().getFullYear()}
+            className={cn(
+              "w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm transition-colors",
+              selectedYear >= new Date().getFullYear() ? "opacity-30 cursor-not-allowed" : "hover:bg-[#F1F4F6]"
+            )}
+          >
+            <ChevronRight size={18} style={{ color: 'var(--theme-primary)' }} />
+          </button>
+        </div>
+        )}
       </div>
 
-      {filteredTransactions.length > 0 ? (
+      {viewMode === 'yearly' ? (
+        /* ====== 年度报表 ====== */
+        <>
+          {/* 年度概览 */}
+          <div className="rounded-2xl p-5 text-white shadow-md" style={{ backgroundColor: 'var(--theme-primary)' }}>
+            <h3 className="text-[16px] font-bold mb-3">{selectedYear}年度总览</h3>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white/10 rounded-xl p-3 text-center">
+                <p className="text-white/70 text-[11px]">总收入</p>
+                <p className="text-[16px] font-bold mt-1">¥{yearlyData.totalIncome.toLocaleString()}</p>
+              </div>
+              <div className="bg-white/10 rounded-xl p-3 text-center">
+                <p className="text-white/70 text-[11px]">总支出</p>
+                <p className="text-[16px] font-bold mt-1">¥{yearlyData.totalExpense.toLocaleString()}</p>
+              </div>
+              <div className="bg-white/10 rounded-xl p-3 text-center">
+                <p className="text-white/70 text-[11px]">结余</p>
+                <p className={cn("text-[16px] font-bold mt-1", yearlyData.balance < 0 ? "text-red-300" : "")}>
+                  ¥{Math.abs(yearlyData.balance).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 12个月柱状图 */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <h3 className="text-[#181C1E] text-[15px] font-bold mb-4">月度{tab === 'expense' ? '支出' : '收入'}对比</h3>
+            <div className="h-48 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={yearlyData.months} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F4F6" />
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#A0AEC0', fontSize: 10 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#A0AEC0', fontSize: 10 }}
+                    tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#181C1E', border: 'none', borderRadius: '8px', color: '#fff', fontSize: 12 }}
+                    formatter={(value: number) => [`¥${value.toLocaleString()}`, tab === 'expense' ? '支出' : '收入']}
+                  />
+                  <Bar dataKey={tab === 'expense' ? 'expense' : 'income'} radius={[4, 4, 0, 0]} maxBarSize={20}>
+                    {yearlyData.months.map((entry) => {
+                      const val = tab === 'expense' ? entry.expense : entry.income;
+                      return <Cell key={`ym-${entry.month}`} fill={val > 0 ? 'var(--theme-primary)' : '#F1F4F6'} fillOpacity={val > 0 ? 0.85 : 0.4} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* 月度明细列表 */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <h3 className="text-[#181C1E] text-[15px] font-bold mb-3">各月明细</h3>
+            <div className="flex flex-col gap-2">
+              {yearlyData.months.map(m => {
+                const val = tab === 'expense' ? m.expense : m.income;
+                if (val === 0) return null;
+                const maxVal = Math.max(...yearlyData.months.map(x => tab === 'expense' ? x.expense : x.income));
+                const barW = maxVal > 0 ? Math.round((val / maxVal) * 100) : 0;
+                return (
+                  <button key={m.month} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#F7FAFC] transition-colors"
+                    onClick={() => { setSelectedMonth(m.month); setViewMode('monthly'); }}>
+                    <span className="text-[13px] font-semibold text-[#181C1E] w-8 shrink-0">{m.label}</span>
+                    <div className="flex-1 h-2 bg-[#F1F4F6] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${barW}%`, backgroundColor: 'var(--theme-primary)' }} />
+                    </div>
+                    <span className="text-[13px] font-bold text-[#181C1E] w-20 text-right shrink-0">¥{val.toLocaleString()}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      ) : (
+      /* ====== 月度报表 ====== */
+      filteredTransactions.length > 0 ? (
         <>
           {/* ====== 1. 概览摘要卡片 ====== */}
           <div className="grid grid-cols-2 gap-3">
@@ -403,7 +524,7 @@ export function Reports() {
               </div>
               <div className="flex flex-col gap-3">
                 {topTransactions.map((tx, index) => {
-                  const catConf = categoryConfig[tx.category];
+                  const catConf = CATEGORY_MAP[tx.category];
                   const RankIcon = index < 3 ? rankIcons[index] : null;
                   const rankColors = ['#E85D04', '#717783', '#AA6B39'];
                   return (
@@ -470,7 +591,7 @@ export function Reports() {
           <Inbox size={48} className="text-[#A0AEC0]" />
           <p className="text-[#717783] text-sm">本月暂无{tab === 'expense' ? '支出' : '收入'}记录</p>
         </div>
-      )}
+      ))}
     </div>
   );
 }
