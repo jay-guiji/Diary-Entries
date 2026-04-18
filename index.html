@@ -95,15 +95,48 @@
     </div>
     <script type="module" src="/src/main.tsx"></script>
 
-    <!-- 注册 Service Worker -->
+    <!-- 【BUILD MARKER v6】启动即卸载所有 SW + 打点 -->
     <script>
+      console.log('%c[BUILD v6 @ ' + new Date().toISOString() + '] HTML loaded', 'color:green;font-weight:bold');
+      // 🔥 立刻主动卸载所有 Service Worker（在 React 加载前执行），防止旧 SW 拦截主 JS
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('SW registered:', reg.scope))
-            .catch(err => console.log('SW registration failed:', err));
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          console.log('[BUILD v6] existing SW count:', regs.length);
+          if (regs.length > 0) {
+            console.warn('[BUILD v6] unregistering all old SW...');
+            Promise.all(regs.map(r => r.unregister())).then(() => {
+              // 清空所有 cache 后刷新一次
+              if (window.caches && caches.keys) {
+                caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
+                  .then(() => {
+                    console.warn('[BUILD v6] caches cleared, reloading...');
+                    // 只刷一次，避免死循环
+                    if (!sessionStorage.getItem('sw_cleared')) {
+                      sessionStorage.setItem('sw_cleared', '1');
+                      location.reload();
+                    }
+                  });
+              }
+            });
+          }
         });
       }
+      // 10 秒后检查 React 是否渲染
+      setTimeout(() => {
+        var root = document.getElementById('root');
+        if (!root || !root.children.length) {
+          console.error('[BUILD v6] React 10s内未渲染！root子元素数=', root ? root.children.length : 'null');
+          document.title = '⚠ React未渲染';
+        } else {
+          console.log('[BUILD v6] React 已渲染，root 子元素数:', root.children.length);
+        }
+      }, 10000);
+    </script>
+
+    <!-- 注册 Service Worker（v6：先不注册新 SW，确认页面正常后再恢复） -->
+    <script>
+      // 暂时禁用 SW 注册以排查问题
+      console.log('[BUILD v6] SW registration DISABLED for debugging');
     </script>
   </body>
 </html>
