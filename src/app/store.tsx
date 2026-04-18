@@ -24,10 +24,22 @@ export interface UserProfile {
   avatarEmoji: string;
 }
 
+export interface TransactionTemplate {
+  id: string;
+  name: string;
+  type: TransactionType;
+  amount: number;
+  category: string;
+  subcategory?: string;
+  note?: string;
+}
+
 export interface AppState {
   transactions: Transaction[];
   budgetTotal: number;
   isQuickAddOpen: boolean;
+  editingTransaction: Transaction | null;
+  templates: TransactionTemplate[];
   theme: ThemeSettings;
   userProfile: UserProfile;
 }
@@ -44,6 +56,7 @@ interface AppContextType extends AppState, ComputedState {
   addTransaction: (tx: Omit<Transaction, 'id'>) => void;
   deleteTransaction: (id: string) => void;
   updateTransaction: (id: string, updates: Partial<Omit<Transaction, 'id'>>) => void;
+  setEditingTransaction: (tx: Transaction | null) => void;
   setBudgetTotal: (amount: number) => void;
   clearAllData: () => void;
   importData: (data: { transactions: Transaction[]; budgetTotal: number }) => void;
@@ -63,12 +76,17 @@ interface AppContextType extends AppState, ComputedState {
   // 自定义 emoji
   customEmojis: Record<string, string>;
   setCustomEmoji: (subcategoryName: string, emoji: string) => void;
+  // 记账模板
+  addTemplate: (tpl: Omit<TransactionTemplate, 'id'>) => void;
+  deleteTemplate: (id: string) => void;
+  useTemplate: (tpl: TransactionTemplate) => void;
 }
 
 // --- localStorage 持久化 ---
 const STORAGE_KEY = 'bookkeeping_data';
 const THEME_KEY = 'bookkeeping_theme';
 const PROFILE_KEY = 'bookkeeping_profile';
+const TEMPLATES_KEY = 'bookkeeping_templates';
 const SUBCATEGORIES_KEY = 'bookkeeping_subcategories';
 const SUBCATEGORY_ORDER_KEY = 'bookkeeping_subcategory_order';
 const CUSTOM_EMOJIS_KEY = 'bookkeeping_custom_emojis';
@@ -95,6 +113,7 @@ export const DEFAULT_SUBCATEGORIES: Record<string, SubcategoryItem[]> = {
     { name: '烧烤', emoji: '🍖' },
     { name: '甜点', emoji: '🍰' },
     { name: '夜宵', emoji: '🌙' },
+    { name: '奶茶', emoji: '🧋' },
   ],
   Transport: [
     { name: '打车', emoji: '🚕' },
@@ -453,6 +472,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [editingTransaction, setEditingTransactionState] = useState<Transaction | null>(null);
+  const [templates, setTemplates] = useState<TransactionTemplate[]>(() => {
+    try {
+      const raw = localStorage.getItem(TEMPLATES_KEY);
+      if (raw) { const data = JSON.parse(raw); if (Array.isArray(data)) return data; }
+    } catch { /* ignore */ }
+    return [];
+  });
 
   const [theme, setThemeState] = useState<ThemeSettings>(loadTheme);
   const [userProfile, setUserProfileState] = useState<UserProfile>(loadProfile);
@@ -476,6 +503,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setQuickAddOpen = useCallback((open: boolean) => {
     setIsQuickAddOpen(open);
+    if (!open) setEditingTransactionState(null);
+  }, []);
+
+  const setEditingTransaction = useCallback((tx: Transaction | null) => {
+    setEditingTransactionState(tx);
+    if (tx) setIsQuickAddOpen(true);
+  }, []);
+
+  const addTemplate = useCallback((tpl: Omit<TransactionTemplate, 'id'>) => {
+    setTemplates(prev => {
+      const next = [...prev, { ...tpl, id: generateId() }];
+      try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const deleteTemplate = useCallback((id: string) => {
+    setTemplates(prev => {
+      const next = prev.filter(t => t.id !== id);
+      try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const useTemplate = useCallback((tpl: TransactionTemplate) => {
+    const newTx: Transaction = {
+      id: generateId(),
+      type: tpl.type,
+      amount: tpl.amount,
+      category: tpl.category,
+      subcategory: tpl.subcategory,
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      merchant: tpl.subcategory || tpl.name,
+      note: tpl.note,
+    };
+    setTransactions(prev => [newTx, ...prev]);
   }, []);
 
   const addTransaction = useCallback((tx: Omit<Transaction, 'id'>) => {
@@ -614,6 +678,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       transactions,
       budgetTotal,
       isQuickAddOpen,
+      editingTransaction,
+      templates,
       theme,
       userProfile,
       ...computed,
@@ -621,6 +687,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addTransaction,
       deleteTransaction,
       updateTransaction,
+      setEditingTransaction,
+      addTemplate,
+      deleteTemplate,
+      useTemplate,
       setBudgetTotal: handleSetBudgetTotal,
       clearAllData,
       importData,
@@ -638,7 +708,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       customEmojis,
       setCustomEmoji,
     }),
-    [transactions, budgetTotal, isQuickAddOpen, theme, userProfile, computed, setQuickAddOpen, addTransaction, deleteTransaction, updateTransaction, handleSetBudgetTotal, clearAllData, importData, exportData, setTheme, setUserProfile, customSubcategories, addCustomSubcategory, removeCustomSubcategory, removeDefaultSubcategory, removedDefaults, getSubcategories, subcategoryOrder, setSubcategoryOrder, customEmojis, setCustomEmoji]
+    [transactions, budgetTotal, isQuickAddOpen, editingTransaction, templates, theme, userProfile, computed, setQuickAddOpen, addTransaction, deleteTransaction, updateTransaction, setEditingTransaction, addTemplate, deleteTemplate, useTemplate, handleSetBudgetTotal, clearAllData, importData, exportData, setTheme, setUserProfile, customSubcategories, addCustomSubcategory, removeCustomSubcategory, removeDefaultSubcategory, removedDefaults, getSubcategories, subcategoryOrder, setSubcategoryOrder, customEmojis, setCustomEmoji]
   );
 
   return (
