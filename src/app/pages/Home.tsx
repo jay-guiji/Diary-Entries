@@ -1,11 +1,12 @@
 import React from 'react';
 import { useApp, type Transaction } from '../store';
 import { cn } from '../utils/cn';
-import { ArrowDownLeft, ArrowUpRight, ShoppingBag, Banknote, Car, Coffee, Utensils, Briefcase, Gift, TrendingUp, Film, Inbox } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Inbox } from 'lucide-react';
 import { Link } from 'react-router';
+import { getCategoryName, getCategoryIconComponent, getCategoryColor, CATEGORY_MAP } from '../utils/categories';
 
 export function Home() {
-  const { balance, monthlyIncome, monthlyExpense, budgetTotal, budgetUsed, transactions } = useApp();
+  const { balance, monthlyIncome, monthlyExpense, budgetTotal, budgetUsed, transactions, templates, useTemplate } = useApp();
 
   const recentTransactions = transactions.slice(0, 3);
   const budgetPercentage = budgetTotal > 0 ? Math.min(Math.round((budgetUsed / budgetTotal) * 100), 100) : 0;
@@ -88,6 +89,27 @@ export function Home() {
         </p>
       </section>
 
+      {/* 快捷记账模板 */}
+      {templates.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h3 className="text-[#181C1E] text-[18px] font-medium px-1">快捷记账</h3>
+          <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            {templates.map(tpl => (
+              <button
+                key={tpl.id}
+                onClick={() => useTemplate(tpl)}
+                className="flex flex-col items-center gap-1.5 px-4 py-3 bg-white rounded-xl shadow-sm shrink-0 min-w-[80px] active:scale-95 transition-all border border-[#F1F4F6]"
+              >
+                <span className="text-[16px] font-bold" style={{ color: 'var(--theme-primary)' }}>
+                  ¥{tpl.amount}
+                </span>
+                <span className="text-[11px] text-[#717783] font-medium">{tpl.name}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Recent Transactions */}
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between px-1">
@@ -122,32 +144,9 @@ function EmptyState() {
 }
 
 function getCategoryIcon(category: string, type: 'income' | 'expense') {
-  if (type === 'income') {
-    switch (category) {
-      case 'Salary': return <Briefcase className="text-[#006D3C]" size={20} />;
-      case 'Bonus': return <Gift className="text-[#006D3C]" size={20} />;
-      case 'Investment': return <TrendingUp className="text-[#006D3C]" size={20} />;
-      default: return <Banknote className="text-[#006D3C]" size={20} />;
-    }
-  }
-  switch (category) {
-    case 'Shopping': return <ShoppingBag className="text-[#005DA7]" size={20} />;
-    case 'Transport': return <Car className="text-[#AA2E33]" size={20} />;
-    case 'Dining': return <Utensils className="text-[#E85D04]" size={20} />;
-    case 'Entertainment': return <Film className="text-[#7C3AED]" size={20} />;
-    default: return <Coffee className="text-[#717783]" size={20} />;
-  }
-}
-
-function getIconBgClass(type: 'income' | 'expense', category: string) {
-  if (type === 'income') return "bg-[#006D3C]/10";
-  switch (category) {
-    case 'Shopping': return "bg-[#005DA7]/10";
-    case 'Transport': return "bg-[#AA2E33]/10";
-    case 'Dining': return "bg-[#E85D04]/10";
-    case 'Entertainment': return "bg-[#7C3AED]/10";
-    default: return "bg-gray-100";
-  }
+  const Icon = getCategoryIconComponent(category);
+  const color = type === 'income' ? '#006D3C' : (getCategoryColor(category));
+  return <Icon className={`text-[${color}]`} size={20} style={{ color }} />;
 }
 
 function formatRelativeDate(dateStr: string, time: string): string {
@@ -167,15 +166,17 @@ function formatRelativeDate(dateStr: string, time: string): string {
 
 function TransactionItem({ transaction }: { transaction: Transaction }) {
   const isIncome = transaction.type === 'income';
-  // 显示名称优先级：subcategory > merchant > category名称
   const displayName = transaction.subcategory || transaction.merchant || getCategoryName(transaction.category);
+  const iconColor = isIncome ? '#006D3C' : getCategoryColor(transaction.category);
   return (
     <div className={cn(
       "rounded-xl p-4 flex items-center justify-between",
       isIncome ? "bg-white shadow-sm" : "bg-[#F1F4F6]"
     )}>
       <div className="flex items-center gap-4">
-        <div className={cn("w-12 h-12 rounded-full flex items-center justify-center", getIconBgClass(transaction.type, transaction.category))}>
+        <div className="w-12 h-12 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: `${iconColor}15` }}
+        >
           {getCategoryIcon(transaction.category, transaction.type)}
         </div>
         <div className="flex flex-col">
@@ -193,18 +194,4 @@ function TransactionItem({ transaction }: { transaction: Transaction }) {
       </span>
     </div>
   );
-}
-
-function getCategoryName(category: string) {
-  const map: Record<string, string> = {
-    'Shopping': '购物',
-    'Salary': '薪资',
-    'Transport': '交通',
-    'Dining': '餐饮',
-    'Entertainment': '娱乐',
-    'Bonus': '奖金',
-    'Investment': '投资',
-    'Other': '其他',
-  };
-  return map[category] || category;
 }
