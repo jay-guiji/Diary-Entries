@@ -2,38 +2,48 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, type SubcategoryItem } from '../store';
 import { cn } from '../utils/cn';
-import { Utensils, Car, ShoppingBag, Film, Banknote, Gift, Briefcase, TrendingUp, PenLine, Delete, Plus, X, ChevronDown, GripVertical, MoreHorizontal, Trash2 } from 'lucide-react';
-
-const expenseCategories = [
-  { id: 'Dining', name: '餐饮', icon: Utensils },
-  { id: 'Transport', name: '交通', icon: Car },
-  { id: 'Shopping', name: '购物', icon: ShoppingBag },
-  { id: 'Entertainment', name: '娱乐', icon: Film },
-  { id: 'OtherExpense', name: '其他', icon: MoreHorizontal },
-];
-
-const incomeCategories = [
-  { id: 'Salary', name: '薪资', icon: Briefcase },
-  { id: 'Bonus', name: '奖金', icon: Gift },
-  { id: 'Investment', name: '投资', icon: TrendingUp },
-  { id: 'Other', name: '其他', icon: Banknote },
-];
+import { PenLine, Delete, Plus, X, ChevronDown, GripVertical, Trash2 } from 'lucide-react';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../utils/categories';
 
 const MAX_AMOUNT = 9999999.99;
 const MAX_DECIMAL_PLACES = 2;
 
+// 自定义分类时可选的 emoji 图标
+const EMOJI_OPTIONS = [
+  // 餐饮相关
+  '🍔', '🍕', '🍜', '🍣', '🧋', '🍦', '🍰', '🍩',
+  '🍪', '🥤', '🍺', '🍷', '🥗', '🌮', '🍝', '🥘',
+  // 生活购物
+  '🛍️', '👟', '💊', '🧴', '🧹', '📦', '🎒', '👔',
+  // 交通出行
+  '🚗', '🏍️', '⛽', '🚌', '🚁', '🛴', '🚢', '🏖️',
+  // 娱乐休闲
+  '🎬', '🎮', '🎵', '📖', '🎨', '🎳', '🏄', '⛷️',
+  // 工作学习
+  '💻', '📝', '🎓', '💼', '📊', '🏢', '📚', '✏️',
+  // 健康运动
+  '🏃', '🧘', '💪', '🏥', '💉', '🏋️', '🚴', '⚽',
+  // 家居生活
+  '🏠', '🛋️', '💡', '🔧', '🧺', '🌱', '🐶', '🐱',
+  // 情感社交
+  '🎁', '💝', '🤝', '🎂', '💐', '🧧', '✨', '📌',
+];
+
 export function QuickAddModal() {
-  const { isQuickAddOpen, setQuickAddOpen, addTransaction, getSubcategories, addCustomSubcategory, removeCustomSubcategory, removeDefaultSubcategory, customSubcategories, setSubcategoryOrder } = useApp();
+  const { isQuickAddOpen, setQuickAddOpen, addTransaction, updateTransaction, editingTransaction, setEditingTransaction, addTemplate, getSubcategories, addCustomSubcategory, removeCustomSubcategory, removeDefaultSubcategory, customSubcategories, setSubcategoryOrder } = useApp();
 
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amount, setAmount] = useState('0');
   const [selectedCategory, setSelectedCategory] = useState('Dining');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<'today' | 'yesterday'>('today');
+  const [selectedDate, setSelectedDate] = useState<'today' | 'yesterday' | 'custom'>('today');
+  const [customDate, setCustomDate] = useState('');
   const [note, setNote] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customName, setCustomName] = useState('');
+  const [customEmoji, setCustomEmoji] = useState('📌');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -42,7 +52,7 @@ export function QuickAddModal() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const customInputRef = useRef<HTMLInputElement>(null);
 
-  const categories = type === 'expense' ? expenseCategories : incomeCategories;
+  const categories = type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
   const subcategories = getSubcategories(selectedCategory);
   
   // 收起时默认显示的数量
@@ -59,16 +69,20 @@ export function QuickAddModal() {
 
   const handleClose = () => {
     setQuickAddOpen(false);
+    setEditingTransaction(null);
     setTimeout(() => {
       setAmount('0');
       setType('expense');
       setSelectedCategory('Dining');
       setSelectedSubcategory(null);
       setSelectedDate('today');
+      setCustomDate('');
       setNote('');
       setShowNoteInput(false);
       setShowCustomInput(false);
       setCustomName('');
+      setCustomEmoji('📌');
+      setShowEmojiPicker(false);
       setIsExpanded(false);
       setIsReordering(false);
       setLongPressTarget(null);
@@ -82,6 +96,8 @@ export function QuickAddModal() {
     setSelectedSubcategory(null);
     setShowCustomInput(false);
     setCustomName('');
+    setCustomEmoji('📌');
+    setShowEmojiPicker(false);
     setIsExpanded(false);
     setIsReordering(false);
   };
@@ -91,6 +107,8 @@ export function QuickAddModal() {
     setSelectedSubcategory(null);
     setShowCustomInput(false);
     setCustomName('');
+    setCustomEmoji('📌');
+    setShowEmojiPicker(false);
     setIsExpanded(false);
     setIsReordering(false);
     setLongPressTarget(null);
@@ -103,10 +121,12 @@ export function QuickAddModal() {
   const handleAddCustom = () => {
     const trimmed = customName.trim();
     if (trimmed) {
-      addCustomSubcategory(selectedCategory, trimmed);
+      addCustomSubcategory(selectedCategory, trimmed, customEmoji);
       setSelectedSubcategory(trimmed);
       setCustomName('');
+      setCustomEmoji('📌');
       setShowCustomInput(false);
+      setShowEmojiPicker(false);
     }
   };
 
@@ -218,6 +238,9 @@ export function QuickAddModal() {
   };
 
   const getDateString = (): string => {
+    if (selectedDate === 'custom' && customDate) {
+      return customDate;
+    }
     const now = new Date();
     if (selectedDate === 'yesterday') {
       now.setDate(now.getDate() - 1);
@@ -225,20 +248,39 @@ export function QuickAddModal() {
     return now.toISOString().split('T')[0];
   };
 
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+
   const handleSave = () => {
     const numAmount = parseFloat(amount);
     if (numAmount > 0) {
-      const categoryName = categories.find(c => c.id === selectedCategory)?.name || '未分类';
-      addTransaction({
+      const categoryName = categories.find(c => c.id === selectedCategory)?.shortName || '未分类';
+      const txData = {
         type,
         amount: numAmount,
         category: selectedCategory,
         subcategory: selectedSubcategory || undefined,
         date: getDateString(),
-        time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+        time: editingTransaction ? editingTransaction.time : new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
         merchant: selectedSubcategory || categoryName,
         note: note || undefined,
-      });
+      };
+
+      if (editingTransaction) {
+        updateTransaction(editingTransaction.id, txData);
+      } else {
+        addTransaction(txData);
+        // 保存为模板
+        if (saveAsTemplate) {
+          addTemplate({
+            name: selectedSubcategory || categoryName,
+            type,
+            amount: numAmount,
+            category: selectedCategory,
+            subcategory: selectedSubcategory || undefined,
+            note: note || undefined,
+          });
+        }
+      }
       handleClose();
     }
   };
@@ -287,7 +329,7 @@ export function QuickAddModal() {
                     收入
                   </button>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <button
                     onClick={() => setSelectedDate('today')}
                     className={cn(
@@ -308,6 +350,26 @@ export function QuickAddModal() {
                   >
                     昨天
                   </button>
+                  <label className={cn(
+                    "relative px-3 py-1.5 text-sm font-semibold rounded-full transition-all cursor-pointer",
+                    selectedDate === 'custom' ? "bg-[#E2EAF1]" : "bg-[#F1F4F6] text-[#717783]"
+                  )}
+                    style={selectedDate === 'custom' ? { color: 'var(--theme-primary)' } : undefined}
+                  >
+                    {selectedDate === 'custom' && customDate
+                      ? `${parseInt(customDate.split('-')[1])}/${parseInt(customDate.split('-')[2])}`
+                      : '选日期'}
+                    <input
+                      type="date"
+                      value={customDate}
+                      onChange={(e) => {
+                        setSelectedDate('custom');
+                        setCustomDate(e.target.value);
+                      }}
+                      max={new Date().toISOString().split('T')[0]}
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                    />
+                  </label>
                 </div>
               </div>
 
@@ -360,7 +422,7 @@ export function QuickAddModal() {
                       <span className={cn("text-xs font-semibold", isSelected ? "" : "text-[#717783]")}
                         style={isSelected ? { color: 'var(--theme-primary)' } : undefined}
                       >
-                        {cat.name}
+                        {cat.shortName}
                       </span>
                     </button>
                   );
@@ -520,7 +582,7 @@ export function QuickAddModal() {
                       })}
                     </motion.div>
 
-                    {/* 自定义输入框 */}
+                    {/* 自定义输入框（带 emoji 选择器） */}
                     <AnimatePresence>
                       {showCustomInput && (
                         <motion.div
@@ -531,6 +593,18 @@ export function QuickAddModal() {
                           className="overflow-hidden"
                         >
                           <div className="flex items-center gap-2 mt-2">
+                            {/* Emoji 选择按钮 */}
+                            <button
+                              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                              className={cn(
+                                "h-9 w-9 rounded-lg flex items-center justify-center text-lg shrink-0 border-2 transition-all",
+                                showEmojiPicker ? "border-transparent shadow-sm" : "border-[#E2E8F0] bg-[#F1F4F6]"
+                              )}
+                              style={showEmojiPicker ? { borderColor: 'var(--theme-primary)', backgroundColor: 'var(--theme-primary-bg, #F0F7FF)' } : undefined}
+                              title="选择图标"
+                            >
+                              {customEmoji}
+                            </button>
                             <input
                               ref={customInputRef}
                               type="text"
@@ -538,7 +612,7 @@ export function QuickAddModal() {
                               onChange={(e) => setCustomName(e.target.value)}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') handleAddCustom();
-                                if (e.key === 'Escape') { setShowCustomInput(false); setCustomName(''); }
+                                if (e.key === 'Escape') { setShowCustomInput(false); setCustomName(''); setCustomEmoji('📌'); setShowEmojiPicker(false); }
                               }}
                               placeholder="输入自定义细分..."
                               maxLength={10}
@@ -557,18 +631,68 @@ export function QuickAddModal() {
                               添加
                             </button>
                             <button
-                              onClick={() => { setShowCustomInput(false); setCustomName(''); }}
+                              onClick={() => { setShowCustomInput(false); setCustomName(''); setCustomEmoji('📌'); setShowEmojiPicker(false); }}
                               className="h-9 w-9 rounded-lg bg-[#F1F4F6] flex items-center justify-center text-[#717783] hover:bg-[#E2E8F0] transition-colors shrink-0"
                             >
                               <X size={16} />
                             </button>
                           </div>
+
+                          {/* Emoji 选择网格 */}
+                          <AnimatePresence>
+                            {showEmojiPicker && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.15 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="mt-2 p-2 bg-[#F7FAFC] rounded-xl border border-[#E2E8F0]">
+                                  <div className="text-[11px] text-[#717783] mb-1.5 font-medium">选择图标</div>
+                                  <div className="grid grid-cols-8 gap-1">
+                                    {EMOJI_OPTIONS.map(emoji => (
+                                      <button
+                                        key={emoji}
+                                        onClick={() => { setCustomEmoji(emoji); setShowEmojiPicker(false); }}
+                                        className={cn(
+                                          "w-9 h-9 rounded-lg flex items-center justify-center text-lg hover:bg-white hover:shadow-sm transition-all",
+                                          customEmoji === emoji ? "bg-white shadow-sm ring-2" : ""
+                                        )}
+                                        style={customEmoji === emoji ? { '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties : undefined}
+                                      >
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </motion.div>
                       )}
                     </AnimatePresence>
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* 保存为模板选项 */}
+              {!editingTransaction && (
+                <button
+                  onClick={() => setSaveAsTemplate(!saveAsTemplate)}
+                  className="flex items-center gap-2 self-start"
+                >
+                  <div className={cn(
+                    "w-4 h-4 rounded border-2 flex items-center justify-center transition-all",
+                    saveAsTemplate ? "border-transparent" : "border-[#CBD5E0]"
+                  )}
+                    style={saveAsTemplate ? { backgroundColor: 'var(--theme-primary)', borderColor: 'var(--theme-primary)' } : undefined}
+                  >
+                    {saveAsTemplate && <span className="text-white text-[10px] leading-none">✓</span>}
+                  </div>
+                  <span className="text-[12px] text-[#717783]">同时保存为快捷模板</span>
+                </button>
+              )}
 
               {/* Numpad — +/- 已移除，不再作为金额输入键 */}
               <div className="grid grid-cols-4 gap-3 bg-white mt-2">
@@ -593,7 +717,7 @@ export function QuickAddModal() {
                   )}
                   style={parseFloat(amount) > 0 ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                 >
-                  保存
+                  {editingTransaction ? '更新' : '保存'}
                 </button>
               </div>
             </div>
