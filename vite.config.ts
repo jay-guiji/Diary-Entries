@@ -9,12 +9,22 @@ const certPath = path.resolve(__dirname, '.cert/cert.pem');
 const keyPath = path.resolve(__dirname, '.cert/key.pem');
 const hasLocalCert = fs.existsSync(certPath) && fs.existsSync(keyPath);
 
+// 🔧 移除构建输出中的 crossorigin 属性（CloudStudio serve 不返回 CORS header，会导致 JS 静默不执行）
+function removeCrossorigin() {
+  return {
+    name: 'remove-crossorigin',
+    enforce: 'post' as const,
+    transformIndexHtml(html: string) {
+      return html.replace(/\s*crossorigin\s*/g, ' ')
+    }
+  }
+}
+
 export default defineConfig({
   plugins: [
-    // The React and Tailwind plugins are both required for Make, even if
-    // Tailwind is not being actively used – do not remove them
     react(),
     tailwindcss(),
+    removeCrossorigin(),
   ],
   resolve: {
     alias: {
@@ -32,28 +42,28 @@ export default defineConfig({
   // 本地预览服务器配置（PWA 需要 HTTPS）
   server: {
     host: '0.0.0.0',
+    allowedHosts: true,
     https: hasLocalCert ? { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) } : undefined,
   },
   preview: {
     host: '0.0.0.0',
+    allowedHosts: true,
     port: 4173,
     https: hasLocalCert ? { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) } : undefined,
   },
 
   build: {
-    // 手动 chunk 分割 — 大依赖单独打包，利用浏览器缓存
+    // ⚠ 不加 crossorigin（CloudStudio 的 serve 不返回 CORS header，会导致 JS 静默不执行）
+    // Vite 默认会在 script/link 上加 crossorigin，这里显式关闭
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 300,
+    minify: 'esbuild',
     rollupOptions: {
       output: {
         manualChunks: {
-          // React 核心（不常更新，长期缓存）
-          'vendor-react': ['react', 'react-dom'],
-          // 路由（独立 chunk）
           'vendor-router': ['react-router'],
-          // 图表库（较大，只在报表页用到，懒加载即可）
           'vendor-recharts': ['recharts'],
-          // 动画库
           'vendor-motion': ['motion'],
-          // UI 基础库
           'vendor-radix': [
             '@radix-ui/react-dialog',
             '@radix-ui/react-popover',
@@ -67,14 +77,5 @@ export default defineConfig({
         },
       },
     },
-    // 提高 chunk 拆分阈值提示
-    chunkSizeWarningLimit: 300,
-    // 启用 CSS 代码分割，减小首屏 CSS 体积
-    cssCodeSplit: true,
-    // 使用默认 esbuild 压缩，移除 console 和 debugger
-    minify: 'esbuild',
-  },
-  esbuild: {
-    drop: ['console', 'debugger'],
   },
 })
