@@ -305,12 +305,21 @@ export function QuickAddModal() {
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             className="fixed bottom-0 left-0 right-0 w-full max-w-md mx-auto bg-white rounded-t-3xl z-50 shadow-2xl flex flex-col pt-2"
-            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)', maxHeight: '92vh' }}
           >
-            {/* Drag Handle */}
-            <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto my-2" />
+            {/* Header: Drag Handle + Close Button */}
+            <div className="flex items-center justify-between px-4 pt-1 pb-0 shrink-0">
+              <div className="w-8" />
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+              <button
+                onClick={handleClose}
+                className="w-8 h-8 rounded-full bg-[#F1F4F6] flex items-center justify-center text-[#717783] hover:bg-[#E2E8F0] transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
 
-            <div className="flex flex-col gap-5 p-6">
+            <div className="flex flex-col gap-5 p-6 pt-3 overflow-y-auto flex-1">
               {/* Tabs & Date */}
               <div className="flex items-center justify-between">
                 <div className="flex bg-[#F1F4F6] p-1 rounded-full w-40">
