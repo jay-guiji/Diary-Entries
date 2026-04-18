@@ -347,82 +347,6 @@ function saveToStorage(transactions: Transaction[], budgetTotal: number) {
   }
 }
 
-// --- Mock 数据（仅首次使用） ---
-const mockTransactions: Transaction[] = [
-  {
-    id: '1',
-    type: 'expense',
-    amount: 284.50,
-    category: 'Shopping',
-    merchant: '盒马鲜生',
-    date: '2026-03-22',
-    time: '14:30',
-  },
-  {
-    id: '2',
-    type: 'income',
-    amount: 15000.00,
-    category: 'Salary',
-    merchant: '工资收入',
-    date: '2026-03-21',
-    time: '09:00',
-  },
-  {
-    id: '3',
-    type: 'expense',
-    amount: 42.00,
-    category: 'Transport',
-    merchant: '滴滴出行',
-    date: '2026-03-20',
-    time: '18:45',
-  },
-  {
-    id: '4',
-    type: 'expense',
-    amount: 45.00,
-    category: 'Dining',
-    merchant: '午餐',
-    date: '2026-03-22',
-    time: '12:30',
-  },
-  {
-    id: '5',
-    type: 'expense',
-    amount: 128.50,
-    category: 'Shopping',
-    merchant: '日用品',
-    date: '2026-03-19',
-    time: '10:15',
-  },
-  {
-    id: '6',
-    type: 'income',
-    amount: 8500.00,
-    category: 'Salary',
-    merchant: '兼职收入',
-    date: '2026-03-15',
-    time: '09:00',
-  },
-  {
-    id: '7',
-    type: 'expense',
-    amount: 320.00,
-    category: 'Transport',
-    merchant: '加油',
-    date: '2026-03-15',
-    time: '18:45',
-  },
-  {
-    id: '8',
-    type: 'expense',
-    amount: 25.00,
-    category: 'Dining',
-    merchant: '咖啡',
-    date: '2026-03-14',
-    time: '08:30',
-  },
-];
-
 // --- 工具函数 ---
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
@@ -463,7 +387,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const stored = loadFromStorage();
-    return stored ? stored.transactions : mockTransactions;
+    return stored ? stored.transactions : [];
   });
 
   const [budgetTotal, setBudgetTotal] = useState<number>(() => {
@@ -563,9 +487,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearAllData = useCallback(() => {
-    setTransactions(mockTransactions);
+    setTransactions([]);
     setBudgetTotal(5000);
     localStorage.removeItem(STORAGE_KEY);
+    // 同时清除所有相关的 localStorage 数据
+    localStorage.removeItem(THEME_KEY);
+    localStorage.removeItem(PROFILE_KEY);
+    localStorage.removeItem(TEMPLATES_KEY);
+    localStorage.removeItem(SUBCATEGORIES_KEY);
+    localStorage.removeItem(SUBCATEGORY_ORDER_KEY);
+    localStorage.removeItem(CUSTOM_EMOJIS_KEY);
+    localStorage.removeItem(REMOVED_DEFAULTS_KEY);
+    localStorage.removeItem('bookkeeping_reminders');
+    localStorage.removeItem('bookkeeping_feedbacks');
+    // 重置所有相关 state
+    setThemeState({ colorScheme: 'blue', fontSize: 'medium' });
+    applyThemeToDOM({ colorScheme: 'blue', fontSize: 'medium' });
+    setUserProfileState({ nickname: '我的账本', avatarEmoji: '😊' });
+    setCustomSubcategories({});
+    setSubcategoryOrderState({});
+    setCustomEmojisState({});
+    setRemovedDefaultsState({});
+    setTemplates([]);
   }, []);
 
   const importData = useCallback((data: { transactions: Transaction[]; budgetTotal: number }) => {
