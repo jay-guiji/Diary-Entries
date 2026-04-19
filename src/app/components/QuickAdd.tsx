@@ -657,15 +657,15 @@ export function QuickAddModal() {
                                 transition={{ duration: 0.15 }}
                                 className="overflow-hidden"
                               >
-                                <div className="mt-2 p-2 bg-[#F7FAFC] rounded-xl border border-[#E2E8F0]">
-                                  <div className="text-[11px] text-[#717783] mb-1.5 font-medium">选择图标</div>
-                                  <div className="grid grid-cols-8 gap-1">
+                                <div className="mt-2 p-3 bg-[#F7FAFC] rounded-xl border border-[#E2E8F0]">
+                                  <div className="text-xs text-[#717783] mb-2 font-medium">选择图标</div>
+                                  <div className="grid grid-cols-7 gap-1.5">
                                     {EMOJI_OPTIONS.map(emoji => (
                                       <button
                                         key={emoji}
                                         onClick={() => { setCustomEmoji(emoji); setShowEmojiPicker(false); }}
                                         className={cn(
-                                          "w-9 h-9 rounded-lg flex items-center justify-center text-lg hover:bg-white hover:shadow-sm transition-all",
+                                          "aspect-square rounded-lg flex items-center justify-center text-2xl hover:bg-white hover:shadow-sm transition-all",
                                           customEmoji === emoji ? "bg-white shadow-sm ring-2" : ""
                                         )}
                                         style={customEmoji === emoji ? { '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties : undefined}
