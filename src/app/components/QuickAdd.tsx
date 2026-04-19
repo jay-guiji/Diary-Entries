@@ -658,14 +658,22 @@ export function QuickAddModal() {
                                 className="overflow-hidden"
                               >
                                 <div className="mt-2 p-3 bg-[#F7FAFC] rounded-xl border border-[#E2E8F0]">
-                                  <div className="text-xs text-[#717783] mb-2 font-medium">选择图标</div>
-                                  <div className="grid grid-cols-7 gap-1.5">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-[#717783] font-medium">选择图标</span>
+                                    <button
+                                      onClick={() => setShowEmojiPicker(false)}
+                                      className="text-xs px-2 py-0.5 rounded-md text-[#717783] hover:bg-[#E2E8F0] transition-colors"
+                                    >
+                                      收起
+                                    </button>
+                                  </div>
+                                  <div className="grid grid-cols-8 gap-2">
                                     {EMOJI_OPTIONS.map(emoji => (
                                       <button
                                         key={emoji}
                                         onClick={() => { setCustomEmoji(emoji); setShowEmojiPicker(false); }}
                                         className={cn(
-                                          "aspect-square rounded-lg flex items-center justify-center text-2xl hover:bg-white hover:shadow-sm transition-all",
+                                          "w-10 h-10 rounded-lg flex items-center justify-center text-[26px] hover:bg-white hover:shadow-sm transition-all active:scale-90",
                                           customEmoji === emoji ? "bg-white shadow-sm ring-2" : ""
                                         )}
                                         style={customEmoji === emoji ? { '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties : undefined}
@@ -703,32 +711,45 @@ export function QuickAddModal() {
                 </button>
               )}
 
-              {/* Numpad — +/- 已移除，不再作为金额输入键 */}
-              <div className="grid grid-cols-4 gap-3 bg-white mt-2">
-                {['1', '2', '3'].map(k => <NumpadKey key={k} value={k} onClick={() => handleNumpad(k)} />)}
-                <NumpadKey value="delete" icon={<Delete size={20} />} bg="bg-[#E2E8F0]" onClick={() => handleNumpad('delete')} />
+              {/* Numpad — emoji 选择器打开时隐藏键盘 */}
+              <AnimatePresence mode="wait">
+                {!showEmojiPicker && (
+                  <motion.div
+                    key="numpad"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="grid grid-cols-4 gap-3 bg-white mt-2">
+                      {['1', '2', '3'].map(k => <NumpadKey key={k} value={k} onClick={() => handleNumpad(k)} />)}
+                      <NumpadKey value="delete" icon={<Delete size={20} />} bg="bg-[#E2E8F0]" onClick={() => handleNumpad('delete')} />
 
-                {['4', '5', '6'].map(k => <NumpadKey key={k} value={k} onClick={() => handleNumpad(k)} />)}
-                <NumpadKey value="00" onClick={() => { handleNumpad('0'); handleNumpad('0'); }} bg="bg-[#E2E8F0]" />
+                      {['4', '5', '6'].map(k => <NumpadKey key={k} value={k} onClick={() => handleNumpad(k)} />)}
+                      <NumpadKey value="00" onClick={() => { handleNumpad('0'); handleNumpad('0'); }} bg="bg-[#E2E8F0]" />
 
-                {['7', '8', '9'].map(k => <NumpadKey key={k} value={k} onClick={() => handleNumpad(k)} />)}
-                <NumpadKey value="." onClick={() => handleNumpad('.')} bg="bg-[#E2E8F0]" />
+                      {['7', '8', '9'].map(k => <NumpadKey key={k} value={k} onClick={() => handleNumpad(k)} />)}
+                      <NumpadKey value="." onClick={() => handleNumpad('.')} bg="bg-[#E2E8F0]" />
 
-                <NumpadKey value="0" onClick={() => handleNumpad('0')} />
-                <button
-                  onClick={handleSave}
-                  disabled={parseFloat(amount) <= 0}
-                  className={cn(
-                    "col-span-3 h-14 rounded-2xl text-xl font-medium shadow-md transition-all active:scale-95",
-                    parseFloat(amount) > 0
-                      ? "text-white"
-                      : "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"
-                  )}
-                  style={parseFloat(amount) > 0 ? { backgroundColor: 'var(--theme-primary)' } : undefined}
-                >
-                  {editingTransaction ? '更新' : '保存'}
-                </button>
-              </div>
+                      <NumpadKey value="0" onClick={() => handleNumpad('0')} />
+                      <button
+                        onClick={handleSave}
+                        disabled={parseFloat(amount) <= 0}
+                        className={cn(
+                          "col-span-3 h-14 rounded-2xl text-xl font-medium shadow-md transition-all active:scale-95",
+                          parseFloat(amount) > 0
+                            ? "text-white"
+                            : "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"
+                        )}
+                        style={parseFloat(amount) > 0 ? { backgroundColor: 'var(--theme-primary)' } : undefined}
+                      >
+                        {editingTransaction ? '更新' : '保存'}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
         </>
