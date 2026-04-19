@@ -295,6 +295,7 @@ export function QuickAddModal() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={handleClose}
+            onTouchMove={(e) => e.preventDefault()}
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 max-w-md mx-auto"
           />
 
@@ -667,20 +668,26 @@ export function QuickAddModal() {
                                       收起
                                     </button>
                                   </div>
-                                  <div className="grid grid-cols-8 gap-2">
-                                    {EMOJI_OPTIONS.map(emoji => (
-                                      <button
-                                        key={emoji}
-                                        onClick={() => { setCustomEmoji(emoji); setShowEmojiPicker(false); }}
-                                        className={cn(
-                                          "w-10 h-10 rounded-lg flex items-center justify-center text-[26px] hover:bg-white hover:shadow-sm transition-all active:scale-90",
-                                          customEmoji === emoji ? "bg-white shadow-sm ring-2" : ""
-                                        )}
-                                        style={customEmoji === emoji ? { '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties : undefined}
-                                      >
-                                        {emoji}
-                                      </button>
-                                    ))}
+                                  <div
+                                    className="overflow-y-auto max-h-[280px] -mx-1 px-1"
+                                    style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
+                                    onTouchMove={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="grid grid-cols-8 gap-2">
+                                      {EMOJI_OPTIONS.map(emoji => (
+                                        <button
+                                          key={emoji}
+                                          onClick={() => { setCustomEmoji(emoji); setShowEmojiPicker(false); }}
+                                          className={cn(
+                                            "w-10 h-10 rounded-lg flex items-center justify-center text-[26px] hover:bg-white hover:shadow-sm transition-all active:scale-90",
+                                            customEmoji === emoji ? "bg-white shadow-sm ring-2" : ""
+                                          )}
+                                          style={customEmoji === emoji ? { '--tw-ring-color': 'var(--theme-primary)' } as React.CSSProperties : undefined}
+                                        >
+                                          {emoji}
+                                        </button>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
                               </motion.div>
