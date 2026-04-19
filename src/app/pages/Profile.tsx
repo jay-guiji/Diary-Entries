@@ -864,10 +864,16 @@ export function Profile() {
     if (activeModal === 'none') return null;
 
     return (
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setActiveModal('none')}>
+      <div
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+        onClick={() => setActiveModal('none')}
+        style={{ overscrollBehavior: 'contain' }}
+        onTouchMove={(e) => e.preventDefault()}
+      >
         <div
           className="bg-[#F7FAFC] w-full max-w-md rounded-t-3xl max-h-[85vh] flex flex-col animate-slide-up"
           onClick={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
         >
           {activeModal === 'profile' && (
             <ProfileEditPanel
