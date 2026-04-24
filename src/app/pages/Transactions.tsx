@@ -52,6 +52,7 @@ export function Transactions() {
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       result = result.filter(tx =>
+        tx.date.includes(term) ||
         (tx.merchant && tx.merchant.toLowerCase().includes(term)) ||
         (tx.note && tx.note.toLowerCase().includes(term)) ||
         (tx.subcategory && tx.subcategory.toLowerCase().includes(term)) ||
