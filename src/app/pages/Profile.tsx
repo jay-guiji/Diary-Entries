@@ -27,7 +27,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
-import { useApp, THEME_COLORS, FONT_SIZE_MAP } from '../store';
+import { useApp, getBudgetPeriod, THEME_COLORS, FONT_SIZE_MAP } from '../store';
 import { categoryNames as catNames } from '../utils/categories';
 
 // ==================== 类型定义 ====================
@@ -135,12 +135,16 @@ function ProfileEditPanel({
 function BudgetPanel({
   budgetTotal,
   monthlyExpense,
+  budgetStartDay,
   onSave,
+  onSaveStartDay,
   onClose,
 }: {
   budgetTotal: number;
   monthlyExpense: number;
+  budgetStartDay: number;
   onSave: (amount: number) => void;
+  onSaveStartDay: (day: number) => void;
   onClose: () => void;
 }) {
   const [amount, setAmount] = useState(String(budgetTotal));
@@ -149,13 +153,18 @@ function BudgetPanel({
   const percent = numericAmount > 0 ? Math.min(100, Math.round((monthlyExpense / numericAmount) * 100)) : 0;
   const remaining = numericAmount - monthlyExpense;
 
+  const { start, end } = getBudgetPeriod(budgetStartDay);
+  const periodLabel = `${start.slice(5).replace('-', '/')} ~ ${end.slice(5).replace('-', '/')}`;
+
+  const startDayOptions = [1, 5, 10, 15, 20, 25];
+
   return (
     <div className="flex flex-col h-full">
       <PanelHeader title="预算管理" onClose={onClose} />
       <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
         <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--theme-primary-bg)' }}>
           <div className="flex justify-between items-center mb-2">
-            <span className="text-[#717783] text-xs">本月已支出 / 预算</span>
+            <span className="text-[#717783] text-xs">本期已支出 / 预算</span>
             <span className={cn('text-sm font-bold', percent >= 100 ? 'text-red-500' : percent >= 80 ? 'text-amber-500' : '')}
               style={percent < 80 ? { color: 'var(--theme-primary)' } : undefined}>
               {percent}%
@@ -179,6 +188,29 @@ function BudgetPanel({
               已超支 ¥{Math.abs(remaining).toLocaleString()}
             </p>
           )}
+          <p className="text-[#A0AEC0] text-[11px] mt-1">预算周期: {periodLabel}</p>
+        </div>
+
+        <div>
+          <label className="text-[#181C1E] text-sm font-semibold mb-3 block">预算起始日</label>
+          <p className="text-[#717783] text-xs mb-2">
+            设置工资日/结算日，预算将从每月该日起计算
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {startDayOptions.map(d => (
+              <button
+                key={d}
+                onClick={() => onSaveStartDay(d)}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+                  budgetStartDay === d ? 'text-white' : 'bg-[#F1F4F6] text-[#181C1E]'
+                )}
+                style={budgetStartDay === d ? { backgroundColor: 'var(--theme-primary)' } : undefined}
+              >
+                每月{d}号
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>
@@ -708,8 +740,8 @@ function ToggleSwitch({ value, onChange }: { value: boolean; onChange: (v: boole
 
 export function Profile() {
   const {
-    transactions, monthlyIncome, monthlyExpense, balance, budgetTotal,
-    setBudgetTotal, clearAllData, importData, exportData, theme, setTheme, userProfile, setUserProfile,
+    transactions, monthlyIncome, monthlyExpense, balance, budgetTotal, budgetStartDay,
+    setBudgetTotal, setBudgetStartDay, clearAllData, importData, exportData, theme, setTheme, userProfile, setUserProfile,
   } = useApp();
 
   const [activeModal, setActiveModal] = useState<ModalView>('none');
@@ -737,6 +769,11 @@ export function Profile() {
     setBudgetTotal(amount);
     setActiveModal('none');
     handleToast(`预算已设为 ¥${amount.toLocaleString()}`);
+  };
+
+  const handleBudgetStartDaySave = (day: number) => {
+    setBudgetStartDay(day);
+    handleToast(`预算起始日已设为每月${day}号`);
   };
 
   const handleExport = () => {
@@ -887,7 +924,9 @@ export function Profile() {
             <BudgetPanel
               budgetTotal={budgetTotal}
               monthlyExpense={monthlyExpense}
+              budgetStartDay={budgetStartDay}
               onSave={handleBudgetSave}
+              onSaveStartDay={handleBudgetStartDaySave}
               onClose={() => setActiveModal('none')}
             />
           )}
