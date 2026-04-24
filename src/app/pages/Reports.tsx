@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useApp, type Transaction } from '../store';
+import { useApp, getBudgetPeriod, type Transaction } from '../store';
 import { cn } from '../utils/cn';
 import {
   PieChart, Pie, Cell, ResponsiveContainer,
@@ -15,20 +15,53 @@ import {
 import { CATEGORY_MAP } from '../utils/categories';
 
 export function Reports() {
-  const { transactions, budgetTotal } = useApp();
+  const { transactions, budgetTotal, budgetStartDay } = useApp();
   const [tab, setTab] = useState<'expense' | 'income'>('expense');
   const [viewMode, setViewMode] = useState<'monthly' | 'yearly'>('monthly');
+  const [periodMode, setPeriodMode] = useState<'natural' | 'budget'>(() => budgetStartDay === 1 ? 'natural' : 'budget');
 
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
 
   const monthStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
-  // 当月交易
-  const monthlyTransactions = useMemo(() =>
-    transactions.filter(tx => tx.date.startsWith(monthStr)),
-    [transactions, monthStr]
-  );
+  // 日期格式化工具
+  const fmtDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
+
+  // 当前选择的预算周期范围
+  const currentPeriod = useMemo(() => {
+    if (periodMode === 'natural') {
+      const start = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+      const end = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      return { start, end };
+    } else {
+      const refDate = new Date(selectedYear, selectedMonth - 1, budgetStartDay);
+      return getBudgetPeriod(budgetStartDay, refDate);
+    }
+  }, [selectedYear, selectedMonth, periodMode, budgetStartDay]);
+
+  const periodLabel = useMemo(() => {
+    if (periodMode === 'natural') {
+      return `${selectedYear}年${selectedMonth}月`;
+    } else {
+      return `${currentPeriod.start.slice(5).replace('-', '/')} ~ ${currentPeriod.end.slice(5).replace('-', '/')}`;
+    }
+  }, [periodMode, selectedYear, selectedMonth, currentPeriod]);
+
+  // 当月/当期交易
+  const monthlyTransactions = useMemo(() => {
+    if (periodMode === 'natural') {
+      return transactions.filter(tx => tx.date.startsWith(monthStr));
+    } else {
+      return transactions.filter(tx => tx.date >= currentPeriod.start && tx.date <= currentPeriod.end);
+    }
+  }, [transactions, monthStr, periodMode, currentPeriod]);
 
   // 按类型筛选
   const filteredTransactions = useMemo(() =>
@@ -64,51 +97,97 @@ export function Reports() {
     [filteredTransactions]
   );
 
-  // ====== 新增：概览摘要数据 ======
+  // 概览摘要数据
   const summaryData = useMemo(() => {
     const monthExpense = monthlyTransactions.filter(tx => tx.type === 'expense').reduce((s, tx) => s + tx.amount, 0);
     const monthIncome = monthlyTransactions.filter(tx => tx.type === 'income').reduce((s, tx) => s + tx.amount, 0);
     const txCount = filteredTransactions.length;
-    // 当月天数（到今天或整月）
     const now = new Date();
-    const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
-    const daysInMonth = isCurrentMonth ? now.getDate() : new Date(selectedYear, selectedMonth, 0).getDate();
-    const dailyAvg = daysInMonth > 0 ? totalAmount / daysInMonth : 0;
-    // 预算进度（仅支出）
-    const budgetPercent = budgetTotal > 0 ? Math.min(Math.round((monthExpense / budgetTotal) * 100), 100) : 0;
-    return { monthExpense, monthIncome, txCount, dailyAvg, daysInMonth, budgetPercent };
-  }, [monthlyTransactions, filteredTransactions, totalAmount, selectedYear, selectedMonth, budgetTotal]);
+    const todayStr = fmtDate(now);
 
-  // ====== 新增：上月对比（环比） ======
+    let daysElapsed: number;
+    if (periodMode === 'natural') {
+      const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
+      daysElapsed = isCurrentMonth ? now.getDate() : new Date(selectedYear, selectedMonth, 0).getDate();
+    } else {
+      if (todayStr >= currentPeriod.start && todayStr <= currentPeriod.end) {
+        const startDate = new Date(currentPeriod.start);
+        daysElapsed = Math.floor((now.getTime() - startDate.getTime()) / 86400000) + 1;
+      } else {
+        const startDate = new Date(currentPeriod.start);
+        const endDate = new Date(currentPeriod.end);
+        daysElapsed = Math.floor((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
+      }
+    }
+
+    const dailyAvg = daysElapsed > 0 ? totalAmount / daysElapsed : 0;
+    const budgetPercent = budgetTotal > 0 ? Math.min(Math.round((monthExpense / budgetTotal) * 100), 100) : 0;
+    return { monthExpense, monthIncome, txCount, dailyAvg, daysElapsed, budgetPercent };
+  }, [monthlyTransactions, filteredTransactions, totalAmount, selectedYear, selectedMonth, budgetTotal, periodMode, currentPeriod]);
+
+  // 上期对比（环比）
   const monthComparison = useMemo(() => {
-    let prevM = selectedMonth - 1;
-    let prevY = selectedYear;
-    if (prevM <= 0) { prevM = 12; prevY -= 1; }
-    const prevStr = `${prevY}-${String(prevM).padStart(2, '0')}`;
-    const prevTotal = transactions
-      .filter(tx => tx.date.startsWith(prevStr) && tx.type === tab)
-      .reduce((s, tx) => s + tx.amount, 0);
+    let prevTotal: number;
+    let prevLabel: string;
+
+    if (periodMode === 'natural') {
+      let prevM = selectedMonth - 1;
+      let prevY = selectedYear;
+      if (prevM <= 0) { prevM = 12; prevY -= 1; }
+      const prevStr = `${prevY}-${String(prevM).padStart(2, '0')}`;
+      prevTotal = transactions
+        .filter(tx => tx.date.startsWith(prevStr) && tx.type === tab)
+        .reduce((s, tx) => s + tx.amount, 0);
+      prevLabel = `${prevM}月`;
+    } else {
+      const prevRefDate = new Date(selectedYear, selectedMonth - 2, budgetStartDay);
+      const prevPeriod = getBudgetPeriod(budgetStartDay, prevRefDate);
+      prevTotal = transactions
+        .filter(tx => tx.date >= prevPeriod.start && tx.date <= prevPeriod.end && tx.type === tab)
+        .reduce((s, tx) => s + tx.amount, 0);
+      prevLabel = `上期`;
+    }
+
     const diff = totalAmount - prevTotal;
     const changeRate = prevTotal > 0 ? ((diff / prevTotal) * 100) : (totalAmount > 0 ? 100 : 0);
-    return { prevTotal, diff, changeRate, prevMonth: prevM };
-  }, [transactions, selectedYear, selectedMonth, tab, totalAmount]);
+    return { prevTotal, diff, changeRate, prevLabel };
+  }, [transactions, selectedYear, selectedMonth, tab, totalAmount, periodMode, budgetStartDay]);
 
-  // ====== 新增：每日消费柱状图 ======
+  // 每日消费柱状图
   const dailyData = useMemo(() => {
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-    const dailyMap: Record<number, number> = {};
-    for (const tx of filteredTransactions) {
-      const day = parseInt(tx.date.split('-')[2], 10);
-      dailyMap[day] = (dailyMap[day] || 0) + tx.amount;
+    if (periodMode === 'natural') {
+      const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+      const dailyMap: Record<number, number> = {};
+      for (const tx of filteredTransactions) {
+        const day = parseInt(tx.date.split('-')[2], 10);
+        dailyMap[day] = (dailyMap[day] || 0) + tx.amount;
+      }
+      const result = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        result.push({ day: String(d), amount: dailyMap[d] || 0 });
+      }
+      return result;
+    } else {
+      const txMap: Record<string, number> = {};
+      for (const tx of filteredTransactions) {
+        txMap[tx.date] = (txMap[tx.date] || 0) + tx.amount;
+      }
+      const result = [];
+      const cur = new Date(currentPeriod.start);
+      const endDate = new Date(currentPeriod.end);
+      while (cur <= endDate) {
+        const dateStr = fmtDate(cur);
+        result.push({
+          day: `${cur.getMonth() + 1}/${cur.getDate()}`,
+          amount: txMap[dateStr] || 0,
+        });
+        cur.setDate(cur.getDate() + 1);
+      }
+      return result;
     }
-    const result = [];
-    for (let d = 1; d <= daysInMonth; d++) {
-      result.push({ day: d, amount: dailyMap[d] || 0 });
-    }
-    return result;
-  }, [filteredTransactions, selectedYear, selectedMonth]);
+  }, [filteredTransactions, selectedYear, selectedMonth, periodMode, currentPeriod]);
 
-  // ====== 新增：TOP 消费排行 ======
+  // TOP 消费排行
   const topTransactions = useMemo(() =>
     [...filteredTransactions]
       .sort((a, b) => b.amount - a.amount)
@@ -123,23 +202,33 @@ export function Reports() {
     color: s.color,
   }));
 
-  // 6 个月趋势
+  // 6 个月/期趋势
   const trendData = useMemo(() => {
     const months: { month: string; value: number }[] = [];
     for (let i = 5; i >= 0; i--) {
       let m = selectedMonth - i;
       let y = selectedYear;
       while (m <= 0) { m += 12; y -= 1; }
-      const mStr = `${y}-${String(m).padStart(2, '0')}`;
-      const monthTotal = transactions
-        .filter(tx => tx.date.startsWith(mStr) && tx.type === tab)
-        .reduce((sum, tx) => sum + tx.amount, 0);
-      months.push({ month: `${m}月`, value: monthTotal });
+
+      if (periodMode === 'natural') {
+        const mStr = `${y}-${String(m).padStart(2, '0')}`;
+        const monthTotal = transactions
+          .filter(tx => tx.date.startsWith(mStr) && tx.type === tab)
+          .reduce((sum, tx) => sum + tx.amount, 0);
+        months.push({ month: `${m}月`, value: monthTotal });
+      } else {
+        const refDate = new Date(y, m - 1, budgetStartDay);
+        const period = getBudgetPeriod(budgetStartDay, refDate);
+        const periodTotal = transactions
+          .filter(tx => tx.date >= period.start && tx.date <= period.end && tx.type === tab)
+          .reduce((sum, tx) => sum + tx.amount, 0);
+        months.push({ month: `${m}月`, value: periodTotal });
+      }
     }
     return months;
-  }, [transactions, selectedYear, selectedMonth, tab]);
+  }, [transactions, selectedYear, selectedMonth, tab, periodMode, budgetStartDay]);
 
-  // ====== 年度报表数据 ======
+  // 年度报表数据
   const yearlyData = useMemo(() => {
     const months = [];
     for (let m = 1; m <= 12; m++) {
@@ -168,12 +257,27 @@ export function Reports() {
     const now = new Date();
     const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1;
     const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear;
-    if (nextYear > now.getFullYear() || (nextYear === now.getFullYear() && nextMonth > now.getMonth() + 1)) return;
+    if (periodMode === 'natural') {
+      if (nextYear > now.getFullYear() || (nextYear === now.getFullYear() && nextMonth > now.getMonth() + 1)) return;
+    } else {
+      const nextRefDate = new Date(nextYear, nextMonth - 1, budgetStartDay);
+      const nextPeriod = getBudgetPeriod(budgetStartDay, nextRefDate);
+      const todayStr = fmtDate(now);
+      if (nextPeriod.start > todayStr) return;
+    }
     setSelectedYear(nextYear);
     setSelectedMonth(nextMonth);
   };
 
-  const isCurrentMonth = selectedYear === new Date().getFullYear() && selectedMonth === new Date().getMonth() + 1;
+  const isCurrentPeriod = useMemo(() => {
+    const now = new Date();
+    if (periodMode === 'natural') {
+      return selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
+    } else {
+      const todayStr = fmtDate(now);
+      return todayStr >= currentPeriod.start && todayStr <= currentPeriod.end;
+    }
+  }, [selectedYear, selectedMonth, periodMode, currentPeriod]);
 
   const rankIcons = [Crown, Medal, Award];
 
@@ -220,6 +324,28 @@ export function Reports() {
           </button>
         </div>
 
+        {/* 自然月/预算月切换（仅在月度模式且 budgetStartDay > 1 时显示） */}
+        {viewMode === 'monthly' && budgetStartDay > 1 && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPeriodMode('natural')}
+              className={cn("flex-1 py-1.5 text-[12px] font-semibold rounded-lg transition-all border",
+                periodMode === 'natural' ? "bg-white shadow-sm border-transparent" : "text-[#717783] border-transparent")}
+              style={periodMode === 'natural' ? { color: 'var(--theme-primary)' } : undefined}
+            >
+              自然月
+            </button>
+            <button
+              onClick={() => setPeriodMode('budget')}
+              className={cn("flex-1 py-1.5 text-[12px] font-semibold rounded-lg transition-all border",
+                periodMode === 'budget' ? "bg-white shadow-sm border-transparent" : "text-[#717783] border-transparent")}
+              style={periodMode === 'budget' ? { color: 'var(--theme-primary)' } : undefined}
+            >
+              预算月
+            </button>
+          </div>
+        )}
+
         {viewMode === 'monthly' ? (
         <div className="flex items-center gap-3">
           <button onClick={goToPrevMonth} className="w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm hover:bg-[#F1F4F6] transition-colors">
@@ -227,14 +353,14 @@ export function Reports() {
           </button>
           <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm flex-1 justify-center">
             <Calendar size={16} style={{ color: 'var(--theme-primary)' }} />
-            <span className="text-[#181C1E] text-sm font-bold">{selectedYear}年{selectedMonth}月</span>
+            <span className="text-[#181C1E] text-sm font-bold">{periodLabel}</span>
           </div>
           <button
             onClick={goToNextMonth}
-            disabled={isCurrentMonth}
+            disabled={isCurrentPeriod}
             className={cn(
               "w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm transition-colors",
-              isCurrentMonth ? "opacity-30 cursor-not-allowed" : "hover:bg-[#F1F4F6]"
+              isCurrentPeriod ? "opacity-30 cursor-not-allowed" : "hover:bg-[#F1F4F6]"
             )}
           >
             <ChevronRight size={18} style={{ color: 'var(--theme-primary)' }} />
@@ -343,7 +469,7 @@ export function Reports() {
           <div className="grid grid-cols-2 gap-3">
             <SummaryCard
               icon={<Wallet size={18} />}
-              label={tab === 'expense' ? '本月支出' : '本月收入'}
+              label={tab === 'expense' ? (periodMode === 'natural' ? '本月支出' : '本期支出') : (periodMode === 'natural' ? '本月收入' : '本期收入')}
               value={`¥${totalAmount.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`}
               accent
             />
@@ -363,7 +489,7 @@ export function Reports() {
               ) : (
                 monthComparison.changeRate > 0 ? <ArrowUpRight size={18} /> : monthComparison.changeRate < 0 ? <ArrowDownRight size={18} /> : <Minus size={18} />
               )}
-              label={`环比${monthComparison.prevMonth}月`}
+              label={`环比${monthComparison.prevLabel}`}
               value={`${monthComparison.changeRate > 0 ? '+' : ''}${monthComparison.changeRate.toFixed(1)}%`}
               valueColor={
                 tab === 'expense'
@@ -402,7 +528,7 @@ export function Reports() {
             <div className="w-full flex justify-between items-start mb-4">
               <div>
                 <h3 className="text-[#181C1E] text-[15px] font-bold">{tab === 'expense' ? '支出' : '收入'}分布</h3>
-                <p className="text-[#717783] text-[12px]">本月分类占比</p>
+                <p className="text-[#717783] text-[12px]">{periodMode === 'natural' ? '本月' : '本期'}分类占比</p>
               </div>
             </div>
 
@@ -466,7 +592,7 @@ export function Reports() {
                   <Tooltip
                     cursor={{ fill: 'rgba(0,0,0,0.04)' }}
                     contentStyle={{ backgroundColor: '#181C1E', border: 'none', borderRadius: '8px', color: '#fff', fontSize: 12 }}
-                    labelFormatter={(label: number) => `${selectedMonth}月${label}日`}
+                    labelFormatter={(label: string | number) => periodMode === 'natural' ? `${selectedMonth}月${label}日` : `${label}`}
                     formatter={(value: number) => [`¥${value.toLocaleString()}`, tab === 'expense' ? '支出' : '收入']}
                   />
                   <Bar dataKey="amount" radius={[3, 3, 0, 0]} maxBarSize={12}>
@@ -487,7 +613,7 @@ export function Reports() {
           <div className="rounded-2xl p-5 shadow-md flex flex-col gap-4 text-white" style={{ backgroundColor: 'var(--theme-primary)' }}>
             <div>
               <h3 className="text-[15px] font-bold">{tab === 'expense' ? '支出' : '收入'}趋势</h3>
-              <p className="text-white/70 text-[12px]">过去 6 个月</p>
+              <p className="text-white/70 text-[12px]">过去 6 个{periodMode === 'natural' ? '月' : '期'}</p>
             </div>
 
             <div className="h-40 w-full mt-2">
@@ -520,7 +646,7 @@ export function Reports() {
                 <h3 className="text-[#181C1E] text-[15px] font-bold">
                   {tab === 'expense' ? '大额支出' : '大额收入'} TOP 5
                 </h3>
-                <p className="text-[#717783] text-[12px]">本月单笔金额排行</p>
+                <p className="text-[#717783] text-[12px]">{periodMode === 'natural' ? '本月' : '本期'}单笔金额排行</p>
               </div>
               <div className="flex flex-col gap-3">
                 {topTransactions.map((tx, index) => {
@@ -589,7 +715,7 @@ export function Reports() {
       ) : (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
           <Inbox size={48} className="text-[#A0AEC0]" />
-          <p className="text-[#717783] text-sm">本月暂无{tab === 'expense' ? '支出' : '收入'}记录</p>
+          <p className="text-[#717783] text-sm">{periodMode === 'natural' ? '本月' : '本期'}暂无{tab === 'expense' ? '支出' : '收入'}记录</p>
         </div>
       ))}
     </div>
