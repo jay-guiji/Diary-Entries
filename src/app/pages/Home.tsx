@@ -1,16 +1,19 @@
 import React from 'react';
-import { useApp, type Transaction } from '../store';
+import { useApp, getBudgetPeriod, type Transaction } from '../store';
 import { cn } from '../utils/cn';
 import { ArrowDownLeft, ArrowUpRight, Inbox } from 'lucide-react';
 import { Link } from 'react-router';
 import { getCategoryName, getCategoryIconComponent, getCategoryColor, CATEGORY_MAP } from '../utils/categories';
 
 export function Home() {
-  const { balance, monthlyIncome, monthlyExpense, budgetTotal, budgetUsed, transactions, templates, useTemplate } = useApp();
+  const { balance, monthlyIncome, monthlyExpense, budgetTotal, budgetUsed, transactions, templates, useTemplate, budgetStartDay } = useApp();
 
   const recentTransactions = transactions.slice(0, 3);
   const budgetPercentage = budgetTotal > 0 ? Math.min(Math.round((budgetUsed / budgetTotal) * 100), 100) : 0;
   const isOverBudget = budgetUsed > budgetTotal;
+
+  const { start, end } = getBudgetPeriod(budgetStartDay);
+  const periodLabel = `${start.slice(5).replace('-', '/')} ~ ${end.slice(5).replace('-', '/')}`;
 
   return (
     <div className="flex flex-col gap-8 p-6 pb-32">
@@ -18,7 +21,7 @@ export function Home() {
       <section className="flex flex-col gap-6">
         <div className="flex flex-col gap-1">
           <p className="text-[#717783] text-[11px] font-medium tracking-wide uppercase">
-            本月结余
+            {budgetStartDay === 1 ? '本月结余' : '本期结余'}
           </p>
           <div className="flex items-baseline gap-1 font-extrabold tracking-tight overflow-hidden">
             <span className="text-[40px] leading-tight shrink-0" style={{ color: 'var(--theme-primary)' }}>¥</span>
@@ -36,7 +39,7 @@ export function Home() {
           <div className="bg-[#F1F4F6] rounded-xl p-5 flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <ArrowDownLeft className="text-[#006D3C]" size={14} strokeWidth={3} />
-              <span className="text-[#006D3C] text-[11px] font-medium tracking-wide uppercase">本月收入</span>
+              <span className="text-[#006D3C] text-[11px] font-medium tracking-wide uppercase">{budgetStartDay === 1 ? '本月收入' : '本期收入'}</span>
             </div>
             <p className="text-[#181C1E] text-xl font-semibold">
               ¥{monthlyIncome.toLocaleString('zh-CN')}
@@ -45,7 +48,7 @@ export function Home() {
           <div className="bg-[#F1F4F6] rounded-xl p-5 flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <ArrowUpRight className="text-[#AA2E33]" size={14} strokeWidth={3} />
-              <span className="text-[#AA2E33] text-[11px] font-medium tracking-wide uppercase">本月支出</span>
+              <span className="text-[#AA2E33] text-[11px] font-medium tracking-wide uppercase">{budgetStartDay === 1 ? '本月支出' : '本期支出'}</span>
             </div>
             <p className="text-[#181C1E] text-xl font-semibold">
               ¥{monthlyExpense.toLocaleString('zh-CN')}
@@ -59,6 +62,7 @@ export function Home() {
         <div className="flex items-end justify-between">
           <div className="flex flex-col gap-1">
             <h3 className="text-[#181C1E] text-[18px] font-medium">预算状态</h3>
+            <p className="text-[#717783] text-xs">预算周期: {periodLabel}</p>
             <p className="text-[#414751] text-sm">
               已支出 ¥{budgetUsed.toLocaleString()} / 总计 ¥{budgetTotal.toLocaleString()}
             </p>
