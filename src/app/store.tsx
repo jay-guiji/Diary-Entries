@@ -37,6 +37,7 @@ export interface TransactionTemplate {
 export interface AppState {
   transactions: Transaction[];
   budgetTotal: number;
+  budgetStartDay: number;
   isQuickAddOpen: boolean;
   editingTransaction: Transaction | null;
   templates: TransactionTemplate[];
@@ -58,9 +59,10 @@ interface AppContextType extends AppState, ComputedState {
   updateTransaction: (id: string, updates: Partial<Omit<Transaction, 'id'>>) => void;
   setEditingTransaction: (tx: Transaction | null) => void;
   setBudgetTotal: (amount: number) => void;
+  setBudgetStartDay: (day: number) => void;
   clearAllData: () => void;
-  importData: (data: { transactions: Transaction[]; budgetTotal: number }) => void;
-  exportData: () => { transactions: Transaction[]; budgetTotal: number };
+  importData: (data: { transactions: Transaction[]; budgetTotal: number; budgetStartDay?: number }) => void;
+  exportData: () => { transactions: Transaction[]; budgetTotal: number; budgetStartDay: number };
   setTheme: (theme: ThemeSettings) => void;
   setUserProfile: (profile: UserProfile) => void;
   // 细分标签管理
@@ -91,6 +93,7 @@ const SUBCATEGORIES_KEY = 'bookkeeping_subcategories';
 const SUBCATEGORY_ORDER_KEY = 'bookkeeping_subcategory_order';
 const CUSTOM_EMOJIS_KEY = 'bookkeeping_custom_emojis';
 const REMOVED_DEFAULTS_KEY = 'bookkeeping_removed_defaults';
+const BUDGET_START_DAY_KEY = 'bookkeeping_budget_start_day';
 
 // 子分类数据结构（带 emoji 图标）
 export interface SubcategoryItem {
@@ -352,19 +355,48 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
 }
 
-function getCurrentMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+/**
+ * 根据预算起始日和参考日期，计算该预算周期的 [start, end] 日期范围
+ * @param startDay - 每月几号开始（1-28）
+ * @param referenceDate - 参考日期，默认为今天
+ * @returns { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' }
+ */
+export function getBudgetPeriod(startDay: number, referenceDate?: Date): { start: string; end: string } {
+  const now = referenceDate || new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const day = now.getDate();
+
+  let periodStart: Date;
+  let periodEnd: Date;
+
+  if (startDay === 1) {
+    periodStart = new Date(year, month, 1);
+    periodEnd = new Date(year, month + 1, 0);
+  } else if (day >= startDay) {
+    periodStart = new Date(year, month, startDay);
+    periodEnd = new Date(year, month + 1, startDay - 1);
+  } else {
+    periodStart = new Date(year, month - 1, startDay);
+    periodEnd = new Date(year, month, startDay - 1);
+  }
+
+  const fmt = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
+  return { start: fmt(periodStart), end: fmt(periodEnd) };
 }
 
-function computeMonthlyStats(transactions: Transaction[]): ComputedState & { budgetUsed: number } {
-  const currentMonth = getCurrentMonth();
+function computeMonthlyStats(transactions: Transaction[], budgetStartDay: number): ComputedState & { budgetUsed: number } {
+  const { start, end } = getBudgetPeriod(budgetStartDay);
   let totalIncome = 0;
   let totalExpense = 0;
 
   for (const tx of transactions) {
-    const txMonth = tx.date.substring(0, 7);
-    if (txMonth === currentMonth) {
+    if (tx.date >= start && tx.date <= end) {
       if (tx.type === 'income') {
         totalIncome += tx.amount;
       } else {
@@ -395,6 +427,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return stored ? stored.budgetTotal : 5000;
   });
 
+  const [budgetStartDay, setBudgetStartDayState] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem(BUDGET_START_DAY_KEY);
+      if (raw) {
+        const val = parseInt(raw, 10);
+        if (val >= 1 && val <= 28) return val;
+      }
+    } catch { /* ignore */ }
+    return 1;
+  });
+
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [editingTransaction, setEditingTransactionState] = useState<Transaction | null>(null);
   const [templates, setTemplates] = useState<TransactionTemplate[]>(() => {
@@ -422,8 +465,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveToStorage(transactions, budgetTotal);
   }, [transactions, budgetTotal]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(BUDGET_START_DAY_KEY, String(budgetStartDay));
+    } catch { /* ignore */ }
+  }, [budgetStartDay]);
+
   // 计算月度统计（从交易数据动态计算，不再硬编码）
-  const computed = useMemo(() => computeMonthlyStats(transactions), [transactions]);
+  const computed = useMemo(() => computeMonthlyStats(transactions, budgetStartDay), [transactions, budgetStartDay]);
 
   const setQuickAddOpen = useCallback((open: boolean) => {
     setIsQuickAddOpen(open);
@@ -486,10 +535,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setBudgetTotal(amount);
   }, []);
 
+  const handleSetBudgetStartDay = useCallback((day: number) => {
+    if (day >= 1 && day <= 28) {
+      setBudgetStartDayState(day);
+    }
+  }, []);
+
   const clearAllData = useCallback(() => {
     setTransactions([]);
     setBudgetTotal(5000);
+    setBudgetStartDayState(1);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(BUDGET_START_DAY_KEY);
     // 同时清除所有相关的 localStorage 数据
     localStorage.removeItem(THEME_KEY);
     localStorage.removeItem(PROFILE_KEY);
@@ -511,14 +568,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTemplates([]);
   }, []);
 
-  const importData = useCallback((data: { transactions: Transaction[]; budgetTotal: number }) => {
+  const importData = useCallback((data: { transactions: Transaction[]; budgetTotal: number; budgetStartDay?: number }) => {
     setTransactions(data.transactions);
     setBudgetTotal(data.budgetTotal);
+    if (data.budgetStartDay && data.budgetStartDay >= 1 && data.budgetStartDay <= 28) {
+      setBudgetStartDayState(data.budgetStartDay);
+    }
   }, []);
 
   const exportData = useCallback(() => {
-    return { transactions, budgetTotal };
-  }, [transactions, budgetTotal]);
+    return { transactions, budgetTotal, budgetStartDay };
+  }, [transactions, budgetTotal, budgetStartDay]);
 
   const setTheme = useCallback((newTheme: ThemeSettings) => {
     setThemeState(newTheme);
@@ -620,6 +680,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       transactions,
       budgetTotal,
+      budgetStartDay,
       isQuickAddOpen,
       editingTransaction,
       templates,
@@ -635,6 +696,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteTemplate,
       useTemplate,
       setBudgetTotal: handleSetBudgetTotal,
+      setBudgetStartDay: handleSetBudgetStartDay,
       clearAllData,
       importData,
       exportData,
@@ -651,7 +713,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       customEmojis,
       setCustomEmoji,
     }),
-    [transactions, budgetTotal, isQuickAddOpen, editingTransaction, templates, theme, userProfile, computed, setQuickAddOpen, addTransaction, deleteTransaction, updateTransaction, setEditingTransaction, addTemplate, deleteTemplate, useTemplate, handleSetBudgetTotal, clearAllData, importData, exportData, setTheme, setUserProfile, customSubcategories, addCustomSubcategory, removeCustomSubcategory, removeDefaultSubcategory, removedDefaults, getSubcategories, subcategoryOrder, setSubcategoryOrder, customEmojis, setCustomEmoji]
+    [transactions, budgetTotal, budgetStartDay, isQuickAddOpen, editingTransaction, templates, theme, userProfile, computed, setQuickAddOpen, addTransaction, deleteTransaction, updateTransaction, setEditingTransaction, addTemplate, deleteTemplate, useTemplate, handleSetBudgetTotal, handleSetBudgetStartDay, clearAllData, importData, exportData, setTheme, setUserProfile, customSubcategories, addCustomSubcategory, removeCustomSubcategory, removeDefaultSubcategory, removedDefaults, getSubcategories, subcategoryOrder, setSubcategoryOrder, customEmojis, setCustomEmoji]
   );
 
   return (
