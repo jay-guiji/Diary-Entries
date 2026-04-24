@@ -9,13 +9,15 @@ const certPath = path.resolve(__dirname, '.cert/cert.pem');
 const keyPath = path.resolve(__dirname, '.cert/key.pem');
 const hasLocalCert = fs.existsSync(certPath) && fs.existsSync(keyPath);
 
-// 🔧 移除构建输出中的 crossorigin 属性（CloudStudio serve 不返回 CORS header，会导致 JS 静默不执行）
+// 🔧 移除构建输出中的 crossorigin 属性和 modulepreload（CloudStudio serve 不返回 CORS header，会导致 JS 静默不执行）
 function removeCrossorigin() {
   return {
     name: 'remove-crossorigin',
     enforce: 'post' as const,
     transformIndexHtml(html: string) {
-      return html.replace(/\s*crossorigin\s*/g, ' ')
+      return html
+        .replace(/\s*crossorigin\s*/g, ' ')
+        .replace(/<link\s+rel="modulepreload"[^>]*>/g, '')
     }
   }
 }
